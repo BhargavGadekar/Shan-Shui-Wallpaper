@@ -52,6 +52,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 3. Check current folder / Downloads / home
         let paths = [
             FileManager.default.currentDirectoryPath + "/index.html",
+            NSHomeDirectory() + "/Downloads/My Codes/wallpaper/index.html",
+            NSHomeDirectory() + "/Downloads/codes/wallpaper/index.html",
             NSHomeDirectory() + "/Downloads/wallpaper/index.html",
             NSHomeDirectory() + "/shan-shui-inf/index.html"
         ]
