@@ -90,4 +90,5 @@ In traditional Chinese culture, these masterpieces were painted on long horizont
 ## 📄 Credits & License
 
 * Generative algorithms and original art: [Lingdong Huang](https://github.com/LingDong-) ([shan-shui-inf](https://github.com/LingDong-/shan-shui-inf)).
-* macOS Native Live Wallpaper App & GPU Optimization: Open-source under the [MIT License](LICENSE).
+* macOS / Mac Native Live Wallpaper App & GPU Optimization: Open-source under the [MIT License](LICENSE).
+* Credits: [districtlabs.in](https://districtlabs.in)
