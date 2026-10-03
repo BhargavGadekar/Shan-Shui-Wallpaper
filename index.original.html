@@ -3992,63 +3992,51 @@
     mouseY = e.pageY;
   }
 
-  
-  var lastRenderX = 0;
-  var coordToPx = 1;
-
-  function getViewportDimensions() {
-    var vh = 800; // base coordinate height of Shan Shui landscape
-    var aspect = window.innerWidth / Math.max(window.innerHeight, 1);
-    var vw = vh * aspect;
-    coordToPx = window.innerHeight / 800;
-    return { vw: vw, vh: vh };
-  }
-
-  function calcViewBox(baseX) {
-    var dims = getViewportDimensions();
-    // Render with extra margin on right & left so hardware translation doesn't expose empty space
-    var w = dims.vw + 600;
-    return (baseX - 100).toFixed(1) + " 0 " + w.toFixed(1) + " " + dims.vh.toFixed(1);
+  function calcViewBox() {
+    var zoom = 1.142;
+    return "" + MEM.cursx + " 0 " + MEM.windx / zoom + " " + MEM.windy / zoom;
   }
 
   function viewupdate() {
-    var svg = document.getElementById("SVG");
-    if (!svg) return;
-    var offset = (MEM.cursx - lastRenderX) * coordToPx;
-    svg.style.transform = "translate3d(" + (-offset.toFixed(2)) + "px, 0, 0)";
+    try {
+      document.getElementById("SVG").setAttribute("viewBox", calcViewBox());
+    } catch (e) {
+      console.log("not possible");
+    }
+    //setTimeout(viewupdate,100)
   }
 
-  function pruneChunks() {
-    if (MEM.chunks.length > 25) {
-      var minX = MEM.cursx - 1200;
-      MEM.chunks = MEM.chunks.filter(function(ch) {
-        return ch.x >= minX;
-      });
-      MEM.xmin = Math.max(MEM.xmin, minX);
+  function needupdate() {
+    return true;
+    if (MEM.xmin < MEM.cursx && MEM.cursx < MEM.xmax - MEM.windx) {
+      return false;
     }
+    return true;
   }
 
   function update() {
-    var dims = getViewportDimensions();
-    lastRenderX = MEM.cursx;
-    var renderLeft = MEM.cursx - 200;
-    var renderRight = MEM.cursx + dims.vw + 800;
+    //console.log("update!")
 
-    chunkloader(renderLeft, renderRight);
-    chunkrender(renderLeft, renderRight);
-    pruneChunks();
+    self.chunkloader(MEM.cursx, MEM.cursx + MEM.windx);
+    self.chunkrender(MEM.cursx, MEM.cursx + MEM.windx);
 
-    var bg = document.getElementById("BG");
-    if (bg) {
-      var svgWidthPx = window.innerWidth + 600 * coordToPx;
-      bg.innerHTML =
-        "<svg id='SVG' xmlns='http://www.w3.org/2000/svg' " +
-        "style='mix-blend-mode:multiply; width:" + svgWidthPx.toFixed(1) + "px; height:100vh; display:block; will-change:transform; transform:translate3d(0,0,0);' " +
-        "viewBox='" + calcViewBox(lastRenderX) + "'>" +
-        "<g id='G'>" +
-        MEM.canv +
-        "</g></svg>";
-    }
+    document.getElementById("BG").innerHTML =
+      "<svg id='SVG' xmlns='http://www.w3.org/2000/svg' width='" +
+      MEM.windx +
+      "' height='" +
+      MEM.windy +
+      "' style='mix-blend-mode:multiply;'" +
+      "viewBox = '" +
+      calcViewBox() +
+      "'" +
+      "><g id='G' transform='translate(" +
+      0 +
+      ",0)'>" +
+      MEM.canv +
+      //+ "<circle cx='0' cy='0' r='50' stroke='black' fill='red' />"
+      "</g></svg>";
+
+    //setTimeout(update,1000);
   }
 </script>
 
@@ -4067,417 +4055,307 @@
   }
 </script>
 
-<style>
-  * {
-    box-sizing: border-box;
+<script id="UI">
+  function xcroll(v) {
+    MEM.cursx += v;
+    if (needupdate()) {
+      update();
+    } else {
+      viewupdate();
+    }
   }
-  html, body {
-    margin: 0;
-    padding: 0;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    background-color: #f7f4eb;
-    background-repeat: repeat;
-    user-select: none;
-    -webkit-user-select: none;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  function autoxcroll(v) {
+    if (document.getElementById("AUTO_SCROLL").checked) {
+      xcroll(v);
+      setTimeout(function() {
+        autoxcroll(v);
+      }, 2000);
+    }
   }
+  function rstyle(id, b) {
+    var a = b ? 0.1 : 0.0;
+    document
+      .getElementById(id)
+      .setAttribute(
+        "style",
+        "\
+    width: 32px; \
+    text-align: center;\
+    top: 0px;\
+    color:rgba(0,0,0,0.4);\
+    display:table;\
+    cursor: pointer;\
+    border: 1px solid rgba(0,0,0,0.4);\
+    background-color:rgba(0,0,0," +
+          a +
+          ");\
+  " +
+          "height:" +
+          MEM.windy +
+          "px"
+      );
+    document.getElementById(id + ".t").setAttribute(
+      "style",
+      "vertical-align:middle; display:table-cell"
+      //"position:absolute; top:"+(MEM.windy/2-20)+"px; left:"+(MEM.windx+20)+"px;"
+    );
+  }
+  function toggleVisible(id) {
+    var v = document.getElementById(id).style.display == "none";
+    document.getElementById(id).style.display = v ? "block" : "none";
+  }
+  function toggleText(id, a, b) {
+    var v = document.getElementById(id).innerHTML;
+    document.getElementById(id).innerHTML = v == "" || v == b ? a : b;
+  }
+  var lastScrollX = 0;
+  var pFrame = 0;
+  function present() {
+    var currScrollX = window.scrollX;
+    var step = 1;
+    document.body.scrollTo(Math.max(0, pFrame - 10), window.scrollY);
 
-  #BG {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-  }
+    pFrame += step;
 
-  /* Frosted Glass HUD Overlay */
-  #HUD {
-    position: fixed;
-    top: 16px;
-    left: 16px;
-    z-index: 10000;
-    background: rgba(250, 248, 243, 0.85);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
-    border-radius: 14px;
-    padding: 10px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    color: #2c2825;
-    font-size: 13px;
-    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    max-width: 380px;
-  }
+    //console.log([lastScrollX,currScrollX]);
 
-  #HUD.collapsed .hud-body {
-    display: none;
+    if (pFrame < 20 || Math.abs(lastScrollX - currScrollX) < step * 2) {
+      lastScrollX = currScrollX;
+      setTimeout(present, 1);
+    }
   }
-
-  .hud-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+  function reloadWSeed(s) {
+    var u = window.location.href.split("?")[0];
+    window.location.href = u + "?seed=" + s;
+    //window.location.reload(true)
   }
+  var btnHoverCol = "rgba(0,0,0,0.1)";
+</script>
 
-  .hud-title {
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .hud-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .hud-btn {
-    background: rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 8px;
-    padding: 5px 9px;
-    font-size: 12px;
-    cursor: pointer;
-    color: #2c2825;
-    font-weight: 500;
-    transition: all 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .hud-btn:hover {
-    background: rgba(0, 0, 0, 0.1);
-    transform: translateY(-1px);
-  }
-
-  .hud-btn:active {
-    transform: translateY(0);
-    background: rgba(0, 0, 0, 0.15);
-  }
-
-  .hud-btn.active {
-    background: #2c2825;
-    color: #fff;
-    border-color: #2c2825;
-  }
-
-  .hud-btn-group {
-    display: flex;
-    gap: 4px;
-  }
-
-  .hud-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .hud-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #7a736d;
-    font-weight: 600;
-  }
-
-  .hud-input {
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 11px;
-    font-family: monospace;
-    width: 110px;
-    color: #333;
-  }
-
-  .hud-shortcuts {
-    font-size: 10px;
-    color: #8a827a;
-    line-height: 1.4;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
-    padding-top: 6px;
-    margin-top: 2px;
-  }
-
-  .hud-shortcuts kbd {
-    background: rgba(0, 0, 0, 0.06);
-    border-radius: 4px;
-    padding: 1px 4px;
-    font-family: inherit;
-    font-size: 9px;
-    font-weight: 600;
-  }
-
-  /* Plash or explicit wallpaper mode: hide HUD unless hovered */
-  .is-plash-app #HUD,
-  body.wallpaper-mode #HUD {
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-  .is-plash-app #HUD:hover,
-  body.wallpaper-mode #HUD:hover {
-    opacity: 1 !important;
-    pointer-events: auto !important;
-  }
-</style>
-
-<body>
-  <div id="BG"></div>
-
-  <!-- Minimal HUD Controls -->
-  <div id="HUD">
-    <div class="hud-header">
-      <div class="hud-title">
-        <span>🏔️</span>
-        <span>Shan Shui</span>
+<body style="margin:0">
+  <div
+    id="SETTING"
+    style="
+    position:fixed; 
+    z-index:1000; 
+    left: 40; 
+    top: 3;
+    "
+  >
+    <div
+      id="SET_BTN"
+      style="
+      width:32;
+      height:32;
+      color:rgba(0,0,0,0.4);
+      border: 1px solid rgba(0,0,0,0.4);
+      text-align: center;
+      display: table;
+      cursor: pointer;
+      "
+      onmouseover="document.getElementById('SET_BTN').style.backgroundColor=btnHoverCol"
+      onmouseout="document.getElementById('SET_BTN').style.backgroundColor='rgba(0,0,0,0)'"
+      onclick="toggleVisible('MENU');toggleText('SET_BTN.t','&#x2630;','&#x2715;')"
+      title="Settings"
+    >
+      <div style="display:table-cell; vertical-align: middle;">
+        <font id="SET_BTN.t" size="4px"> &#x2630; </font>
       </div>
-      <div class="hud-actions">
-        <button id="btn-pause" class="hud-btn" onclick="togglePause()" title="Spacebar">⏸ Pause</button>
-        <button class="hud-btn" onclick="newSeed()" title="Press R for new seed">🎲 New</button>
-        <button id="btn-toggle-menu" class="hud-btn" onclick="toggleMenu()" title="Toggle details">⚙</button>
-      </div>
+      <script>
+        window.addEventListener("scroll", function(e) {
+          document.getElementById("SETTING").style.left = Math.max(
+            4,
+            40 - window.scrollX
+          );
+        });
+      </script>
     </div>
+    <div style="height:4px"></div>
+    <div
+      id="MENU"
+      style="
+      display:none;
+      background-color: rgba(0,0,0,0.1);
+      border: 1px solid rgba(0,0,0,0.4);
+      "
+    >
+      <table>
+        <tr>
+          <td><pre>SEED</pre></td>
+        </tr>
+        <tr>
+          <td>
+            <input title="random seed" id="INP_SEED" />
+            <button
+              onclick="reloadWSeed(document.getElementById('INP_SEED').value)"
+            >
+              Generate
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td><pre>VIEW</pre></td>
+        </tr>
+        <tr>
+          <td>
+            <button
+              title="view left"
+              onclick="xcroll(-parseFloat(document.getElementById('INC_STEP').value))"
+            >
+              <
+            </button>
+            <input
+              title="increment step"
+              id="INC_STEP"
+              type="number"
+              value="200"
+              min="0"
+              max="10000"
+              step="20"
+            />
+            <button
+              title="view right"
+              onclick="xcroll(parseFloat(document.getElementById('INC_STEP').value))"
+            >
+              >
+            </button>
+          </td>
+        </tr>
 
-    <div class="hud-body" id="hud-body">
-      <div class="hud-row">
-        <span class="hud-label">Speed</span>
-        <div class="hud-btn-group">
-          <button class="hud-btn speed-btn active" data-speed="3" onclick="setSpeed(3)">Zen (3)</button>
-          <button class="hud-btn speed-btn" data-speed="6" onclick="setSpeed(6)">Calm (6)</button>
-          <button class="hud-btn speed-btn" data-speed="12" onclick="setSpeed(12)">Gentle (12)</button>
-          <button class="hud-btn speed-btn" data-speed="24" onclick="setSpeed(24)">Flow (24)</button>
-        </div>
-      </div>
+        <tr>
+          <td>
+            <pre><input id = "AUTO_SCROLL" type="checkbox" 
+            onchange="autoxcroll(parseFloat(document.getElementById('INC_STEP').value))">Auto-scroll</pre>
+          </td>
 
-      <div class="hud-row">
-        <span class="hud-label">Direction</span>
-        <div class="hud-btn-group">
-          <button id="btn-dir" class="hud-btn" onclick="toggleDirection()">Drift ➔</button>
-          <button class="hud-btn" onclick="downloadSVG()">💾 SVG</button>
-        </div>
-      </div>
+          <td></td>
+        </tr>
 
-      <div class="hud-row">
-        <span class="hud-label">Seed</span>
-        <div style="display:flex; gap:4px;">
-          <input id="INP_SEED" class="hud-input" title="Current Seed" />
-          <button class="hud-btn" onclick="applyCustomSeed()">Go</button>
-        </div>
-      </div>
-
-      <div class="hud-shortcuts">
-        <kbd>Space</kbd> Pause &bull; <kbd>[</kbd>/<kbd>]</kbd> Speed &bull; <kbd>R</kbd> Random &bull; <kbd>H</kbd> Hide UI &bull; <kbd>F</kbd> Fullscreen
-      </div>
+        <tr>
+          <td><pre>SAVE</pre></td>
+        </tr>
+        <tr>
+          <td>
+            <button
+              title="WARNING: This may take a while..."
+              type="button"
+              id="dwn-btn"
+              value="Download as SVG"
+              onclick="download(''+(Math.random())+'.svg', document.getElementById('BG').innerHTML);"
+            >
+              Download as .SVG
+            </button>
+          </td>
+        </tr>
+      </table>
     </div>
   </div>
 
-  <canvas id="bgcanv" width="512" height="512" style="display:none;"></canvas>
-
-  <script>
-    // State
-    var scrollSpeed = 3; // Default to Zen meditative drift (3 pixels per second)
-    var isPaused = false;
-    var scrollDirection = 1; // 1 = scroll right (landscape drifts left), -1 = left
-    var lastFrameTime = performance.now();
-    var uiVisible = true;
-    var hideTimeout = null;
-
-    // Check URL parameters
-    var params = new URLSearchParams(window.location.search);
-    if (params.has("speed")) {
-      var s = parseFloat(params.get("speed"));
-      if (!isNaN(s)) scrollSpeed = s;
-    }
-    if (params.has("paused")) {
-      isPaused = params.get("paused") === "1" || params.get("paused") === "true";
-    }
-    if (params.has("ui") && (params.get("ui") === "0" || params.get("ui") === "false" || params.get("ui") === "none")) {
-      document.body.classList.add("wallpaper-mode");
-    }
-    if (params.has("direction")) {
-      scrollDirection = params.get("direction") === "-1" ? -1 : 1;
-    }
-
-    function updateSpeedUI() {
-      var btns = document.querySelectorAll(".speed-btn");
-      btns.forEach(function(b) {
-        if (parseFloat(b.getAttribute("data-speed")) === scrollSpeed) {
-          b.classList.add("active");
-        } else {
-          b.classList.remove("active");
-        }
+  <div
+    id="SOURCE_BTN"
+    style="
+      position:fixed; 
+      z-index:1000; 
+      left: 77; 
+      top: 3;
+      width:32;
+      height:32;
+      color:rgba(0,0,0,0.4);
+      border: 1px solid rgba(0,0,0,0.4);
+      text-align: center;
+      display: table;
+      cursor: pointer;"
+    onmouseover="document.getElementById('SOURCE_BTN').style.backgroundColor=btnHoverCol"
+    onmouseout="document.getElementById('SOURCE_BTN').style.backgroundColor='rgba(0,0,0,0)'"
+    onclick="window.location='https://github.com/LingDong-/shan-shui-inf';"
+    title="Fork me on Github!"
+  >
+    <div style="display:table-cell; vertical-align: middle;">
+      <font id="SET_BTN.t" size="4px"> &lt;/&gt; </font>
+    </div>
+    <script>
+      window.addEventListener("scroll", function(e) {
+        document.getElementById("SOURCE_BTN").style.left = Math.max(
+          41,
+          77 - window.scrollX
+        );
       });
-    }
+    </script>
+  </div>
 
-    function setSpeed(spd) {
-      scrollSpeed = spd;
-      updateSpeedUI();
-    }
+  <table style="border-bottom: 1px solid rgba(0,0,0,0.1);">
+    <tr>
+      <td>
+        <div
+          id="L"
+          onmouseover="rstyle('L',true)"
+          onmouseout="rstyle('L',false)"
+          onclick="xcroll(-200)"
+        >
+          <div id="L.t"><font size="6px">&#x3008;</font></div>
+          <script>
+            rstyle("L", false);
+          </script>
+        </div>
+      </td>
 
-    function togglePause() {
-      isPaused = !isPaused;
-      var btn = document.getElementById("btn-pause");
-      if (btn) btn.innerHTML = isPaused ? "▶ Play" : "⏸ Pause";
-    }
+      <td>
+        <div id="BG">
+          <script>
+            MEM.lasttick = new Date().getTime();
+            document.getElementById("INP_SEED").value = SEED;
+            document
+              .getElementById("BG")
+              .setAttribute("style", "width:" + MEM.windx + "px");
+            update();
+            document.body.scrollTo(0, 0);
+            console.log(["SCROLLX", window.scrollX]);
+            present();
+            //draw();
+          </script>
+        </div>
+      </td>
 
-    function toggleDirection() {
-      scrollDirection = -scrollDirection;
-      var btn = document.getElementById("btn-dir");
-      if (btn) btn.innerHTML = scrollDirection > 0 ? "Drift ➔" : "Drift ⬅";
-    }
-
-    function newSeed() {
-      var s = "" + new Date().getTime();
-      reloadWithSeed(s);
-    }
-
-    function applyCustomSeed() {
-      var s = document.getElementById("INP_SEED").value.trim();
-      if (s) reloadWithSeed(s);
-    }
-
-    function reloadWithSeed(s) {
-      var url = new URL(window.location.href);
-      url.searchParams.set("seed", s);
-      window.location.href = url.toString();
-    }
-
-    function toggleMenu() {
-      var hud = document.getElementById("HUD");
-      if (hud) hud.classList.toggle("collapsed");
-    }
-
-    function toggleHUD() {
-      var hud = document.getElementById("HUD");
-      if (hud) {
-        uiVisible = !uiVisible;
-        hud.style.opacity = uiVisible ? "1" : "0";
-        hud.style.pointerEvents = uiVisible ? "auto" : "none";
-      }
-    }
-
-    function resetHideTimer() {
-      var hud = document.getElementById("HUD");
-      if (!hud || !uiVisible) return;
-      hud.style.opacity = "1";
-      hud.style.pointerEvents = "auto";
-      clearTimeout(hideTimeout);
-      hideTimeout = setTimeout(function() {
-        if (!hud.matches(":hover") && document.activeElement.tagName !== "INPUT") {
-          hud.style.opacity = "0";
-          hud.style.pointerEvents = "none";
-        }
-      }, 4000);
-    }
-
-    function downloadSVG() {
-      var svgContent = document.getElementById("BG").innerHTML;
-      download("shan-shui-" + SEED + ".svg", svgContent);
-    }
-
-    window.addEventListener("mousemove", resetHideTimer);
-    window.addEventListener("touchstart", resetHideTimer);
-
-    window.addEventListener("keydown", function(e) {
-      if (e.target && e.target.tagName === "INPUT") return;
-      if (e.code === "Space") {
-        e.preventDefault();
-        togglePause();
-      } else if (e.key === "r" || e.key === "R") {
-        newSeed();
-      } else if (e.key === "h" || e.key === "H") {
-        toggleHUD();
-      } else if (e.key === "f" || e.key === "F") {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(function(){});
-        } else {
-          document.exitFullscreen().catch(function(){});
-        }
-      } else if (e.key === "[" || e.key === "-") {
-        setSpeed(Math.max(2, scrollSpeed - 2));
-      } else if (e.key === "]" || e.key === "=" || e.key === "+") {
-        setSpeed(Math.min(60, scrollSpeed + 2));
-      } else if (e.key === "ArrowLeft") {
-        MEM.cursx -= 60;
-        update();
-        viewupdate();
-      } else if (e.key === "ArrowRight") {
-        MEM.cursx += 60;
-        update();
-        viewupdate();
-      }
-    });
-
-    window.addEventListener("resize", function() {
-      update();
-      viewupdate();
-    });
-
-    // Hardware-Accelerated Animation Loop
-    function animLoop(now) {
-      var dt = Math.min((now - lastFrameTime) / 1000, 0.1);
-      lastFrameTime = now;
-
-      if (!isPaused && scrollSpeed !== 0) {
-        MEM.cursx += scrollSpeed * scrollDirection * dt;
-        viewupdate();
-
-        // Re-render SVG vector DOM only when drifting beyond 256 coordinate units
-        // At 6px/s, this happens once every ~42 seconds!
-        if (Math.abs(MEM.cursx - lastRenderX) >= 256) {
-          update();
-        }
-      }
-
-      requestAnimationFrame(animLoop);
-    }
-
-    // Generate Rice Paper Texture
-    var canvas = document.getElementById("bgcanv");
-    var ctx = canvas.getContext("2d");
-    var reso = 512;
-    for (var i = 0; i < reso / 2 + 1; i++) {
-      for (var j = 0; j < reso / 2 + 1; j++) {
-        var c = 245 + Noise.noise(i * 0.1, j * 0.1) * 10;
-        c -= Math.random() * 20;
-        var r = c.toFixed(0);
-        var g = (c * 0.95).toFixed(0);
-        var b = (c * 0.85).toFixed(0);
-        ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
-        ctx.fillRect(i, j, 1, 1);
-        ctx.fillRect(reso - i, j, 1, 1);
-        ctx.fillRect(i, reso - j, 1, 1);
-        ctx.fillRect(reso - i, reso - j, 1, 1);
-      }
-    }
-    var textureUrl = canvas.toDataURL("image/png");
-    document.body.style.backgroundImage = "url(" + textureUrl + ")";
-
-    // Initialize Landscape
-    document.getElementById("INP_SEED").value = SEED;
-    update();
-    updateSpeedUI();
-    if (isPaused) {
-      var btn = document.getElementById("btn-pause");
-      if (btn) btn.innerHTML = "▶ Play";
-    }
-
-    lastFrameTime = performance.now();
-    requestAnimationFrame(animLoop);
-    resetHideTimer();
-  </script>
+      <td>
+        <div
+          id="R"
+          onmouseover="rstyle('R',true)"
+          onmouseout="rstyle('R',false)"
+          onclick="xcroll(200)"
+        >
+          <div id="R.t"><font size="6px">&#x3009;</font></div>
+          <script>
+            rstyle("R", false);
+          </script>
+        </div>
+      </td>
+    </tr>
+  </table>
 </body>
-</html>
+
+<canvas id="bgcanv" width="512" height="512" hidden> </canvas>
+<script>
+  var canvas = document.getElementById("bgcanv");
+  var ctx = canvas.getContext("2d");
+  var reso = 512;
+
+  for (var i = 0; i < reso / 2 + 1; i++) {
+    for (var j = 0; j < reso / 2 + 1; j++) {
+      var c = 245 + Noise.noise(i * 0.1, j * 0.1) * 10;
+      c -= Math.random() * 20;
+
+      var r = c.toFixed(0);
+      var g = (c * 0.95).toFixed(0);
+      var b = (c * 0.85).toFixed(0);
+      ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
+      ctx.fillRect(i, j, 1, 1);
+      ctx.fillRect(reso - i, j, 1, 1);
+      ctx.fillRect(i, reso - j, 1, 1);
+      ctx.fillRect(reso - i, reso - j, 1, 1);
+    }
+  }
+  var img = canvas.toDataURL("image/png");
+  document.getElementById("BG").style.backgroundImage = "url(" + img + ")";
+  document.getElementsByTagName("body")[0].style.backgroundImage =
+    "url(" + img + ")";
+</script>
